@@ -317,161 +317,161 @@ class MO2Instance(ModInstance):
         self.log.info("Loaded instance.")
 
     def copy_mods(self, ldialog: LoadingDialog = None):
-    self.log.info("Migrating mods to instance...")
+        self.log.info("Migrating mods to instance...")
         import concurrent.futures
-    import threading
-    from functools import partial
-    import time
+        import threading
+        from functools import partial
+        import time
 
-    # Max path length for Windows (subtracting some buffer)
-    MAX_SAFE_PATH = 240
-    
-    # Create a mapping of original mod names to sanitized mod names
-    mod_name_mapping = {}
-    
-    # Keep track of files to copy for parallel processing
+        # Max path length for Windows (subtracting some buffer)
+        MAX_SAFE_PATH = 240
+        
+        # Create a mapping of original mod names to sanitized mod names
+        mod_name_mapping = {}
+        
+        # Keep track of files to copy for parallel processing
         copy_tasks = []
-    mod_metadata = {}
-    progress_lock = threading.Lock()
-    
-    # First pass: Prepare all files and directories
+        mod_metadata = {}
+        progress_lock = threading.Lock()
+        
+        # First pass: Prepare all files and directories
         maximum = len(self.mods)
-    for modindex, mod in enumerate(self.mods):
-    self.log.debug(
-    f"Preparing mod '{mod.name}' ({modindex}/{len(self.mods)})..."
-    )
+        for modindex, mod in enumerate(self.mods):
+            self.log.debug(
+                f"Preparing mod '{mod.name}' ({modindex}/{len(self.mods)})..."
+            )
 
-    # Skip mod if it is not selected in source box
-    if not mod.selected:
-    self.log.debug("Skipped mod: Mod is not selected.")
-    continue
+            # Skip mod if it is not selected in source box
+            if not mod.selected:
+                self.log.debug("Skipped mod: Mod is not selected.")
+                continue
 
-    # Update progress bars
-    if ldialog:
-    ldialog.updateProgress(
-                    # Update first progress bar
-            text1=f"Preparing mods ({modindex}/{maximum})",
-            value1=modindex,
-            max1=maximum,
-            # Display and update second progress bar
-            show2=True,
-            text2=mod.metadata["name"],
-            value2=0,
-        max2=0,
-    )
+            # Update progress bars
+            if ldialog:
+                ldialog.updateProgress(
+                        # Update first progress bar
+                    text1=f"{self.loc.main.preparing_mods} ({modindex}/{maximum})",
+                    value1=modindex,
+                    max1=maximum,
+                    # Display and update second progress bar
+                    show2=True,
+                    text2=mod.metadata["name"],
+                    value2=0,
+                    max2=0,
+                )
 
-    # Sanitize mod name to ensure valid paths
-    original_mod_name = mod.metadata["name"]
-    sanitized_mod_name = utils.sanitize_windows_path(original_mod_name)
-    
-    # Check if the mod path would be too long and truncate if necessary
-    base_path_length = len(str(self.mods_path))
-    if (base_path_length + len(sanitized_mod_name)) > MAX_SAFE_PATH:
-    # Calculate how many characters we need to remove
-    excess = (base_path_length + len(sanitized_mod_name)) - MAX_SAFE_PATH
-    # Truncate the name while preserving a meaningful prefix
-    max_name_length = len(sanitized_mod_name) - excess - 5  # Leave room for hash
-    if max_name_length < 10:
-            max_name_length = 10  # Ensure name isn't too short
-        
-        # Create a shorter but still identifiable name
-    prefix = sanitized_mod_name[:max_name_length]
-    # Generate a short hash from the original name to ensure uniqueness
-    import hashlib
-        name_hash = hashlib.md5(original_mod_name.encode()).hexdigest()[:5]
-        sanitized_mod_name = f"{prefix}_{name_hash}"
-        
-        self.log.warning(f"Mod name too long: '{original_mod_name}' → '{sanitized_mod_name}'")
-    
-    # Store the mapping for reference
-    if sanitized_mod_name != original_mod_name:
-    mod_name_mapping[original_mod_name] = sanitized_mod_name
-    # Update the mod name in the object for consistency
+            # Sanitize mod name to ensure valid paths
+            original_mod_name = mod.metadata["name"]
+            sanitized_mod_name = utils.sanitize_windows_path(original_mod_name)
+            
+            # Check if the mod path would be too long and truncate if necessary
+            base_path_length = len(str(self.mods_path))
+            if (base_path_length + len(sanitized_mod_name)) > MAX_SAFE_PATH:
+                # Calculate how many characters we need to remove
+                excess = (base_path_length + len(sanitized_mod_name)) - MAX_SAFE_PATH
+                # Truncate the name while preserving a meaningful prefix
+                max_name_length = len(sanitized_mod_name) - excess - 5  # Leave room for hash
+                if max_name_length < 10:
+                    max_name_length = 10  # Ensure name isn't too short
+                
+                # Create a shorter but still identifiable name
+                prefix = sanitized_mod_name[:max_name_length]
+                # Generate a short hash from the original name to ensure uniqueness
+                import hashlib
+                name_hash = hashlib.md5(original_mod_name.encode()).hexdigest()[:5]
+                sanitized_mod_name = f"{prefix}_{name_hash}"
+                
+                self.log.warning(f"Mod name too long: '{original_mod_name}' → '{sanitized_mod_name}'")
+            
+            # Store the mapping for reference
+            if sanitized_mod_name != original_mod_name:
+                mod_name_mapping[original_mod_name] = sanitized_mod_name
+                # Update the mod name in the object for consistency
                 mod.metadata["sanitized_name"] = sanitized_mod_name
-    
-    # Prepare mod directory path
-    modpath: Path = self.mods_path / sanitized_mod_name
-    modpath = utils.clean_filepath(modpath)
-    
-    # Save metadata for later use
-    mod_metadata[mod.metadata["name"]] = {
-    "modpath": modpath,
-    "metadata": mod.metadata.copy(),
-    "files": []
-    }
-    
-    # Ensure the mod directory exists
-    os.makedirs(f"\\\\?\\{modpath}", exist_ok=True)
+            
+            # Prepare mod directory path
+            modpath: Path = self.mods_path / sanitized_mod_name
+            modpath = utils.clean_filepath(modpath)
+            
+            # Save metadata for later use
+            mod_metadata[mod.metadata["name"]] = {
+                "modpath": modpath,
+                "metadata": mod.metadata.copy(),
+                "files": []
+            }
+            
+            # Ensure the mod directory exists
+            os.makedirs(f"\\\\?\\{modpath}", exist_ok=True)
 
-    # Create a list of file copy tasks
-    for fileindex, file in enumerate(mod.files):
-    src_path = mod.path / file
+            # Create a list of file copy tasks
+            for fileindex, file in enumerate(mod.files):
+                src_path = mod.path / file
                 dst_path = modpath / file
-    dst_dirs = dst_path.parent
+                dst_dirs = dst_path.parent
 
-    # Skip if destination file already exists
-    if dst_path.is_file():
+                # Skip if destination file already exists
+                if dst_path.is_file():
                     continue
-        
-    # Check if the full destination path is too long
-    if len(str(dst_path)) > MAX_SAFE_PATH:
-    # Try to shorten the file path by truncating deep subdirectories
-    path_parts = list(file.parts)
-    # If the file is in a deep directory structure, try to shorten the middle parts
-    if len(path_parts) > 3:
-    for i in range(1, len(path_parts) - 1):
-            if len(str(dst_path)) <= MAX_SAFE_PATH:
+                
+                # Check if the full destination path is too long
+                if len(str(dst_path)) > MAX_SAFE_PATH:
+                    # Try to shorten the file path by truncating deep subdirectories
+                    path_parts = list(file.parts)
+                    # If the file is in a deep directory structure, try to shorten the middle parts
+                    if len(path_parts) > 3:
+                        for i in range(1, len(path_parts) - 1):
+                            if len(str(dst_path)) <= MAX_SAFE_PATH:
                                 break
-                if len(path_parts[i]) > 10:
-                    path_parts[i] = path_parts[i][:8] + "~"
-                new_file = Path(*path_parts)
+                            if len(path_parts[i]) > 10:
+                                path_parts[i] = path_parts[i][:8] + "~"
+                                new_file = Path(*path_parts)
                                 dst_path = modpath / new_file
-                    dst_dirs = dst_path.parent
+                                dst_dirs = dst_path.parent
 
-    # Always use long path prefix to avoid MAX_PATH limitations
-    dst_dirs_str = f"\\\\?\\{dst_dirs}"
-    src_path_str = f"\\\\?\\{src_path}"
-    dst_path_str = f"\\\\?\\{dst_path}"
+                # Always use long path prefix to avoid MAX_PATH limitations
+                dst_dirs_str = f"\\\\?\\{dst_dirs}"
+                src_path_str = f"\\\\?\\{src_path}"
+                dst_path_str = f"\\\\?\\{dst_path}"
 
-    # Add .mohidden to path if file is overwritten
-    if file in mod.overwritten_files:
-    dst_path_str += ".mohidden"
-    
-    file_size = os.path.getsize(src_path) if os.path.exists(src_path) else 0
-    
-    # Store copy task info
-    copy_tasks.append({
-    'src_path': src_path_str,
+                # Add .mohidden to path if file is overwritten
+                if file in mod.overwritten_files:
+                    dst_path_str += ".mohidden"
+                
+                file_size = os.path.getsize(src_path) if os.path.exists(src_path) else 0
+                
+                # Store copy task info
+                copy_tasks.append({
+                    'src_path': src_path_str,
                     'dst_path': dst_path_str,
-        'dst_dirs': dst_dirs_str,
-        'mod_name': mod.metadata['name'],
-    'file_name': file.name,
-    'file_size': file_size,
-    'is_hidden': file in mod.overwritten_files
-    })
-    
-    # Track which files belong to which mod for metadata purposes
-    mod_metadata[mod.metadata["name"]]["files"].append(dst_path)
+                    'dst_dirs': dst_dirs_str,
+                    'mod_name': mod.metadata['name'],
+                    'file_name': file.name,
+                    'file_size': file_size,
+                    'is_hidden': file in mod.overwritten_files
+                })
+                
+                # Track which files belong to which mod for metadata purposes
+                mod_metadata[mod.metadata["name"]]["files"].append(dst_path)
         
-    # Calculate total size for progress tracking
-    total_size = sum(task['file_size'] for task in copy_tasks)
-    copied_size = 0
-    file_count = len(copy_tasks)
-    files_processed = 0
-    
-    # Create all directories first to avoid race conditions
-    all_dirs = set(task['dst_dirs'] for task in copy_tasks)
-    for dir_path in all_dirs:
-    try:
-    os.makedirs(dir_path, exist_ok=True)
-    except OSError as e:
-    self.log.error(f"Failed to create directory {dir_path}: {e}")
-    # Try creating each parent directory individually
-    parent_parts = dir_path.replace('\\\\?\\', '').split('\\')
-        current_path = '\\\\?\\'  
-        for part in parent_parts:
+        # Calculate total size for progress tracking
+        total_size = sum(task['file_size'] for task in copy_tasks)
+        copied_size = 0
+        file_count = len(copy_tasks)
+        files_processed = 0
+        
+        # Create all directories first to avoid race conditions
+        all_dirs = set(task['dst_dirs'] for task in copy_tasks)
+        for dir_path in all_dirs:
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except OSError as e:
+                self.log.error(f"Failed to create directory {dir_path}: {e}")
+                # Try creating each parent directory individually
+                parent_parts = dir_path.replace('\\\\?\\', '').split('\\')
+                current_path = '\\\\?\\'  
+                for part in parent_parts:
                     if not part:
-                    continue
+                        continue
                     current_path = os.path.join(current_path, part)
                     try:
                         os.makedirs(current_path, exist_ok=True)

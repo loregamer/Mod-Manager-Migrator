@@ -69,6 +69,7 @@
     "wipe_notice": "指定的一个或多个文件夹已经存在。如果您继续，它们的内容将被删除。",
     "wiping_instance": "清空实例...",
     "wiping_instance_data": "清空实例数据...",
+    "preparing_mods": "准备模组中...",
     "detected_same_path": "源路径和目标路径必须不同！",
     "elapsed": "已用时间",
     "update_available": "看起来您的 MMM 版本已过时。您正在使用的是版本 [OLD_VERSION] 。\n新版本 [NEW_VERSION] 已经发布。想要现在下载吗？",

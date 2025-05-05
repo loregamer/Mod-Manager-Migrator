@@ -69,6 +69,7 @@
     "wipe_notice": "One or more of the specified folders already exists. If you continue, their contents will be deleted.",
     "wiping_instance": "Wiping instance...",
     "wiping_instance_data": "Wiping instance data...",
+    "preparing_mods": "Preparing mods...",
     "detected_same_path": "The source and destination paths must be different!",
     "elapsed": "Elapsed time",
     "update_available": "It seems like your version of MMM is outdated. You are using the version [OLD_VERSION].\nVersion [NEW_VERSION] is already available. Do you want to download it now?",
