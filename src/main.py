@@ -579,10 +579,18 @@ Current version: {self.version} | Latest version: {new_version}"
             message_box = None
 
             if choice == qtw.QMessageBox.StandardButton.Yes:
-                # Copy root files directly into game directory
+                # First copy root files to a "Game Folder Files" folder in the destination
                 def process(ldialog: widgets.LoadingDialog):
                     ldialog.updateProgress(text1=self.loc.main.copying_files)
 
+                    # Create the Game Folder Files directory in the destination mods folder
+                    game_folder_files_path = self.dst_modinstance.mods_path / "Game Folder Files"
+                    if not game_folder_files_path.exists():
+                        os.makedirs(game_folder_files_path, exist_ok=True)
+                    
+                    self.log.info(f"Copying root mods to {game_folder_files_path}")
+                    
+                    # Then copy to the game folder
                     installdir = self.game_instance.get_install_dir()
                     for i, mod in enumerate(self.src_modinstance.root_mods):
                         ldialog.updateProgress(
@@ -596,7 +604,18 @@ Current version: {self.version} | Latest version: {new_version}"
 
                         src_path = mod.path
                         dst_path = installdir
-
+                        
+                        # First copy to Game Folder Files directory
+                        try:
+                            mod_game_folder_files = game_folder_files_path / mod.metadata["name"]
+                            shutil.copytree(src_path, mod_game_folder_files, dirs_exist_ok=True)
+                            self.log.info(f"Copied {mod.metadata['name']} to Game Folder Files directory")
+                        except shutil.Error as ex:
+                            self.log.error(
+                                f"Failed to copy to Game Folder Files: {ex}"
+                            )
+                        
+                        # Then copy to the game directory as before
                         try:
                             shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
                         except shutil.Error as ex:
