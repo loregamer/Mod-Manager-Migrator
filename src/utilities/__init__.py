@@ -44,8 +44,13 @@ def get_latest_version():
         return 0.0
 
 
+# Get the directory of the current script file
+import os
+script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 blacklist = []
-with open(".\\data\\blacklist", "r", encoding="utf8") as file:
+blacklist_path = os.path.join(script_dir, "data", "blacklist")
+with open(blacklist_path, "r", encoding="utf8") as file:
     for line in file.readlines():
         line = line.strip()
         if line:
@@ -253,6 +258,48 @@ def comp_dicts(dict1: dict, dict2: dict, use_json: bool = False):
                 diff[key] = value1
 
     return diff
+
+
+def sanitize_windows_path(source: str):
+    """
+    Sanitizes a string for Windows path compatibility, handling long paths
+    and illegal characters.
+    
+    Args:
+        source (str): the string to be sanitized.
+    
+    Returns:
+        (str): A sanitized string suitable for Windows paths.
+    """
+    # First apply the regular cleaning
+    output = clean_string(source)
+    
+    # Additional sanitization for Windows paths
+    # Replace consecutive spaces with a single space
+    while "  " in output:
+        output = output.replace("  ", " ")
+    
+    # Trim leading/trailing whitespace and periods
+    output = output.strip(". ")
+    
+    # Ensure name doesn't end with a space or period (Windows restriction)
+    output = output.rstrip(". ")
+    
+    # Replace reserved Windows filenames
+    reserved_names = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4",
+                     "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+                     "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"]
+    
+    # Check if output matches a reserved name (case-insensitive)
+    for name in reserved_names:
+        if output.upper() == name or output.upper().startswith(name + "."):
+            output = "_" + output
+    
+    # Ensure we have a valid string even after all replacements
+    if not output or output.isspace():
+        output = "unnamed_mod"
+    
+    return output
 
 
 # Constant variables #################################################

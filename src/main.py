@@ -42,7 +42,9 @@ class MainApp(qtw.QApplication):
         super().__init__([])
 
         # Initialize variables #######################################
-        with open(".\\data\\version", "r", encoding="utf8") as file:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        version_path = os.path.join(script_dir, "data", "version")
+        with open(version_path, "r", encoding="utf8") as file:
             self.version = file.read().strip()
         self.name = "Mod Manager Migrator"
         # check if compiled with nuitka (or in general)

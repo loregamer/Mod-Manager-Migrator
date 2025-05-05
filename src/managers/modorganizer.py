@@ -97,8 +97,12 @@ class MO2Instance(ModInstance):
                 if not mod.selected:
                     continue
 
-                modname = utils.clean_string(mod.metadata["name"])
-                modname = modname.strip(". ")
+                # Use sanitized name if available, otherwise sanitize it now
+                if "sanitized_name" in mod.metadata:
+                    modname = mod.metadata["sanitized_name"]
+                else:
+                    modname = utils.sanitize_windows_path(mod.metadata["name"])
+                
                 # Enable mod in destination
                 if mod.enabled:
                     mods += "\n+" + modname
@@ -315,6 +319,12 @@ class MO2Instance(ModInstance):
     def copy_mods(self, ldialog: LoadingDialog = None):
         self.log.info("Migrating mods to instance...")
 
+        # Max path length for Windows (subtracting some buffer)
+        MAX_SAFE_PATH = 240
+        
+        # Create a mapping of original mod names to sanitized mod names
+        mod_name_mapping = {}
+        
         maximum = len(self.mods)
         for modindex, mod in enumerate(self.mods):
             self.log.debug(
@@ -340,9 +350,39 @@ class MO2Instance(ModInstance):
                     max2=0,
                 )
 
-            # Copy mod to mod path
-            modpath: Path = self.mods_path / mod.metadata["name"]
+            # Sanitize mod name to ensure valid paths
+            original_mod_name = mod.metadata["name"]
+            sanitized_mod_name = utils.sanitize_windows_path(original_mod_name)
+            
+            # Check if the mod path would be too long and truncate if necessary
+            base_path_length = len(str(self.mods_path))
+            if (base_path_length + len(sanitized_mod_name)) > MAX_SAFE_PATH:
+                # Calculate how many characters we need to remove
+                excess = (base_path_length + len(sanitized_mod_name)) - MAX_SAFE_PATH
+                # Truncate the name while preserving a meaningful prefix
+                max_name_length = len(sanitized_mod_name) - excess - 5  # Leave room for hash
+                if max_name_length < 10:
+                    max_name_length = 10  # Ensure name isn't too short
+                
+                # Create a shorter but still identifiable name
+                prefix = sanitized_mod_name[:max_name_length]
+                # Generate a short hash from the original name to ensure uniqueness
+                import hashlib
+                name_hash = hashlib.md5(original_mod_name.encode()).hexdigest()[:5]
+                sanitized_mod_name = f"{prefix}_{name_hash}"
+                
+                self.log.warning(f"Mod name too long: '{original_mod_name}' → '{sanitized_mod_name}'")
+            
+            # Store the mapping for reference
+            if sanitized_mod_name != original_mod_name:
+                mod_name_mapping[original_mod_name] = sanitized_mod_name
+                # Update the mod name in the object for consistency
+                mod.metadata["sanitized_name"] = sanitized_mod_name
+            
+            # Copy mod to mod path using sanitized name
+            modpath: Path = self.mods_path / sanitized_mod_name
             modpath = utils.clean_filepath(modpath)
+            
             for fileindex, file in enumerate(mod.files):
                 src_path = mod.path / file
                 dst_path = modpath / file
@@ -351,8 +391,23 @@ class MO2Instance(ModInstance):
                 # Skip if destination file already exists
                 if dst_path.is_file():
                     continue
+                    
+                # Check if the full destination path is too long
+                if len(str(dst_path)) > MAX_SAFE_PATH:
+                    # Try to shorten the file path by truncating deep subdirectories
+                    path_parts = list(file.parts)
+                    # If the file is in a deep directory structure, try to shorten the middle parts
+                    if len(path_parts) > 3:
+                        for i in range(1, len(path_parts) - 1):
+                            if len(str(dst_path)) <= MAX_SAFE_PATH:
+                                break
+                            if len(path_parts[i]) > 10:
+                                path_parts[i] = path_parts[i][:8] + "~"
+                                new_file = Path(*path_parts)
+                                dst_path = modpath / new_file
+                                dst_dirs = dst_path.parent
 
-                # Fix too long paths (> 260 characters)
+                # Always use long path prefix to avoid MAX_PATH limitations
                 dst_dirs = f"\\\\?\\{dst_dirs}"
                 src_path = f"\\\\?\\{src_path}"
                 dst_path = f"\\\\?\\{dst_path}"
@@ -372,14 +427,31 @@ class MO2Instance(ModInstance):
                     dst_path += ".mohidden"
 
                 # Create directory structure
-                os.makedirs(dst_dirs, exist_ok=True)
+                try:
+                    os.makedirs(dst_dirs, exist_ok=True)
+                except OSError as e:
+                    self.log.error(f"Failed to create directory {dst_dirs}: {e}")
+                    # Try creating each parent directory individually
+                    parent_parts = dst_dirs.replace('\\\\?\\', '').split('\\')
+                    current_path = '\\\\?\\'
+                    for part in parent_parts:
+                        if not part:
+                            continue
+                        current_path = os.path.join(current_path, part)
+                        try:
+                            os.makedirs(current_path, exist_ok=True)
+                        except OSError:
+                            self.log.error(f"Failed to create directory {current_path}")
 
                 # Copy file
-                if self.app.mode == "copy":
-                    shutil.copyfile(src_path, dst_path)
-                # Link file
-                else:
-                    os.link(src_path, dst_path)
+                try:
+                    if self.app.mode == "copy":
+                        shutil.copyfile(src_path, dst_path)
+                    # Link file
+                    else:
+                        os.link(src_path, dst_path)
+                except OSError as e:
+                    self.log.error(f"Failed to copy {src_path} to {dst_path}: {e}")
 
             # Write metadata to 'meta.ini' in destination mod
             metaini = utils.IniParser(modpath / "meta.ini")
