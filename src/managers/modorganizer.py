@@ -349,15 +349,13 @@ class MO2Instance(ModInstance):
             # Update progress bars
             if ldialog:
                 ldialog.updateProgress(
-                        # Update first progress bar
+                    # Update first progress bar
                     text1=f"{self.loc.main.preparing_mods} ({modindex}/{maximum})",
                     value1=modindex,
                     max1=maximum,
                     # Display and update second progress bar
                     show2=True,
-                    text2=mod.metadata["name"],
-                    value2=0,
-                    max2=0,
+                    text2=f"Reading mod: {mod.metadata['name']}"
                 )
 
             # Sanitize mod name to ensure valid paths
@@ -495,14 +493,16 @@ class MO2Instance(ModInstance):
                     files_processed += 1
                     if ldialog:
                         percent_complete = int((copied_size / total_size) * 100) if total_size > 0 else 0
+                        file_percent = int((files_processed / file_count) * 100) if file_count > 0 else 0
+                        
                         ldialog.updateProgress(
-                            text1=f"Copying files: {percent_complete}% ({files_processed}/{file_count})",
+                            text1=f"Copying files: {percent_complete}% ({utils.scale_value(copied_size)}/{utils.scale_value(total_size)})",
                             value1=copied_size,
                             max1=total_size,
                             show2=True,
-                            text2=f"Currently processing: {task['mod_name']}",
+                            text2=f"Processed {files_processed}/{file_count} files ({file_percent}%)",
                             show3=True,
-                            text3=f"{task['file_name']} ({utils.scale_value(task['file_size'])})"
+                            text3=f"{task['mod_name']} - {task['file_name']}"
                         )
                 return True
             except OSError as e:
@@ -554,10 +554,17 @@ class MO2Instance(ModInstance):
         
         end_time = time.time()
         duration = end_time - start_time
-        self.log.info(f"Parallel copy completed in {duration:.2f} seconds ({files_processed} files, {utils.scale_value(total_size)})")
+        speed_mbps = (total_size / duration) / (1024 * 1024) if duration > 0 else 0
+        self.log.info(f"Parallel copy completed in {duration:.2f} seconds ({files_processed} files, {utils.scale_value(total_size)}, {speed_mbps:.2f} MB/s)")
         
         if ldialog:
-            ldialog.updateProgress(text1="Copy completed", value1=100, max1=100)
+            ldialog.updateProgress(
+                text1=f"Copy completed successfully in {int(duration // 60):02d}:{int(duration % 60):02d}",
+                value1=total_size,
+                max1=total_size,
+                show2=True,
+                text2=f"Processed {files_processed} files - Average speed: {speed_mbps:.2f} MB/s"
+            )
         
         self.log.info("Mod migration complete.")
 
