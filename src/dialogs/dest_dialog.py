@@ -160,7 +160,6 @@ class DestinationDialog(qtw.QDialog):
                 self.modspath_box.setText(os.path.join(folder, "mods"))
                 self.profilespath_box.setText(os.path.join(folder, "profiles"))
                 self.overwritepath_box.setText(os.path.join(folder, "overwrite"))
-                self.gamefolder_files_box.setText(os.path.join(folder, "mods", "Game Folder Files"))
 
         self.browse_button = qtw.QPushButton(self.loc.main.browse)
         self.browse_button.clicked.connect(browse_path)
@@ -249,27 +248,6 @@ class DestinationDialog(qtw.QDialog):
         self.browse_overwrites_button = qtw.QPushButton(self.loc.main.browse)
         self.browse_overwrites_button.clicked.connect(browse_overwritepath)
         details_layout.addWidget(self.browse_overwrites_button, 7, 2)
-        
-        # Add inputbox for Game Folder Files path
-        label = qtw.QLabel("Game Folder Files")
-        details_layout.addWidget(label, 8, 0)
-        self.gamefolder_files_box = qtw.QLineEdit()
-        self.gamefolder_files_box.setText(os.path.join(self.path_box.text(), "mods", "Game Folder Files"))
-        details_layout.addWidget(self.gamefolder_files_box, 8, 1)
-
-        def browse_gamefolderfiles_path():
-            file_dialog = qtw.QFileDialog(self)
-            file_dialog.setWindowTitle(self.loc.main.browse)
-            file_dialog.setDirectory(self.gamefolder_files_box.text())
-            file_dialog.setFileMode(qtw.QFileDialog.FileMode.Directory)
-            if file_dialog.exec():
-                folder = file_dialog.selectedFiles()[0]
-                folder = os.path.normpath(folder)
-                self.gamefolder_files_box.setText(folder)
-
-        self.browse_gamefolderfiles_button = qtw.QPushButton(self.loc.main.browse)
-        self.browse_gamefolderfiles_button.clicked.connect(browse_gamefolderfiles_path)
-        details_layout.addWidget(self.browse_gamefolderfiles_button, 8, 2)
         ##############################################################
 
         # Add widget for hardlink mode
@@ -448,7 +426,6 @@ class DestinationDialog(qtw.QDialog):
         dl_path = Path(self.dlpath_box.text())
         profs_path = Path(self.profilespath_box.text())
         overw_path = Path(self.overwritepath_box.text())
-        game_folder_files_path = Path(self.gamefolder_files_box.text())
 
         # Check if paths are valid
         src_drive = self.app.src_modinstance.mods_path.drive.upper()
@@ -491,7 +468,6 @@ Hardlinks must be on the same drive. \
                     "download_dir": dl_path,
                     "profiles_dir": profs_path,
                     "overwrite_dir": overw_path,
-                    "game_folder_files": game_folder_files_path,
                 },
             }
 

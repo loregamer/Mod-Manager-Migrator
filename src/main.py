@@ -537,120 +537,101 @@ Current version: {self.version} | Latest version: {new_version}"
         # Set up destination instance
         self.dst_modinstance.setup_instance()
 
-        # Process root mods first before any other mods
+        # Check for files that have to be copied
+        # directly into the game folder
+        # since MO2 cannot manage those
         if self.src_modinstance.root_mods:
-            # Create Game Folder Files directory in destination
-            def process_root_mods(ldialog: widgets.LoadingDialog):
-                ldialog.updateProgress(text1="Setting up Game Folder Files mod")
-
-                # Get the Game Folder Files directory from the destination paths
-                game_folder_files_path = self.dst_modinstance.paths.get("game_folder_files_dir", 
-                                                                    self.dst_modinstance.mods_path / "Game Folder Files")
-                
-                if game_folder_files_path.exists():
-                    # If it already exists, remove it to start fresh
-                    if game_folder_files_path.is_dir():
-                        shutil.rmtree(game_folder_files_path)
-                
-                # Create the directory
-                os.makedirs(game_folder_files_path, exist_ok=True)
-                
-                # Retrieve the Game Folder Files path
-                game_folder_files_path = self.dst_modinstance.paths.get("game_folder_files_dir", 
-                                                                    self.dst_modinstance.mods_path / "Game Folder Files")
-                
-                # Create a meta.ini file for proper mod recognition
-                meta_path = game_folder_files_path.with_suffix(".meta")
-                with open(meta_path, "w", encoding="utf-8") as meta_file:
-                    meta_file.write("[General]\n")
-                    meta_file.write("gameName=\n")
-                    meta_file.write("modid=0\n")
-                    meta_file.write("version=\n")
-                    meta_file.write("newestVersion=\n")
-                    meta_file.write("category=0\n")
-                    meta_file.write("installationFile=\n")
-                    meta_file.write("repository=\n")
-                    meta_file.write("ignoredVersion=\n")
-                    meta_file.write("comments=\n")
-                    meta_file.write("notes=\n")
-                    meta_file.write("nexusDescription=\n")
-                    meta_file.write("url=\n")
-                    meta_file.write("hasCustomURL=false\n")
-                    meta_file.write("nexusFileStatus=1\n")
-                    meta_file.write("lastNexusQuery=\n")
-                    meta_file.write("lastNexusUpdate=\n")
-                    meta_file.write("nexusLastModified=\n")
-                    meta_file.write("converted=false\n")
-                    meta_file.write("validated=false\n")
-                    meta_file.write("color=\n")
-                    meta_file.write("tracked=0\n")
-                
-                self.log.info(f"Created Game Folder Files mod directory at {game_folder_files_path}")
-                
-                # Copy all root mods content into this folder
-                ldialog.updateProgress(text1="Copying root mods to Game Folder Files", value1=0, max1=len(self.src_modinstance.root_mods))
-                
-                for i, mod in enumerate(self.src_modinstance.root_mods):
-                    ldialog.updateProgress(
-                        text1=f"Copying root mods to Game Folder Files ({i+1}/{len(self.src_modinstance.root_mods)})",
-                        value1=i,
-                        max1=len(self.src_modinstance.root_mods),
-                        show2=True,
-                        text2=mod.metadata["name"],
-                    )
-
-                    src_path = mod.path
-                    
-                    # Copy this mod's contents directly to Game Folder Files
-                    try:
-                        # List all items in the source mod directory
-                        for item in os.listdir(src_path):
-                            source_item = os.path.join(src_path, item)
-                            dest_item = os.path.join(game_folder_files_path, item)
-                            
-                            # Copy directories recursively
-                            if os.path.isdir(source_item):
-                                shutil.copytree(source_item, dest_item, dirs_exist_ok=True)
-                            # Copy files
-                            else:
-                                shutil.copy2(source_item, dest_item)
-                                
-                        self.log.info(f"Copied {mod.metadata['name']} content to Game Folder Files")
-                    except shutil.Error as ex:
-                        self.log.error(f"Failed to copy to Game Folder Files: {ex}")
-                    except Exception as ex:
-                        self.log.error(f"Error copying {mod.metadata['name']}: {ex}")
-                
-                # Also copy to game directory
-                ldialog.updateProgress(text1="Copying Game Folder Files to game directory", value1=0, max1=1)
-                installdir = self.game_instance.get_install_dir()
-                
-                try:
-                    # Copy the entire Game Folder Files to game directory
-                    shutil.copytree(game_folder_files_path, installdir, dirs_exist_ok=True)
-                    self.log.info(f"Copied Game Folder Files content to game directory at {installdir}")
-                except shutil.Error as ex:
-                    self.log.error(f"Failed to copy to game directory: {ex}")
-                
-                ldialog.updateProgress(text1="Root mods processed successfully", value1=1, max1=1)
-
-            # Process root mods first - before any other mods
-            self.log.info("Processing root mods first")
-            loadingdialog = widgets.LoadingDialog(
-                parent=self.root, app=self, func=process_root_mods
+            message_box = qtw.QMessageBox(self.root)
+            message_box.setWindowIcon(self.root.windowIcon())
+            message_box.setStyleSheet(self.stylesheet)
+            message_box.setWindowTitle(self.loc.main.migrating_instance)
+            message_box.setText(self.loc.main.detected_root_files)
+            message_box.setStandardButtons(
+                qtw.QMessageBox.StandardButton.Ignore
+                | qtw.QMessageBox.StandardButton.Yes
             )
-            loadingdialog.exec()
-            self.log.info("Root mods processed successfully - Game Folder Files mod created")
+            message_box.setDefaultButton(qtw.QMessageBox.StandardButton.Yes)
+            ignore_button = message_box.button(qtw.QMessageBox.StandardButton.Ignore)
+            ignore_button.setText(self.loc.main.ignore)
+            continue_button = message_box.button(qtw.QMessageBox.StandardButton.Yes)
+            continue_button.setText(self.loc.main._continue)
+
+            # Wait for purge if source is Vortex
+            if self.source == "Vortex":
+                timer = qtc.QTimer()
+                timer.setInterval(1000)
+                deploy_file = (
+                    self.src_modinstance.mods_path / "vortex.deployment.msgpack"
+                )
+                continue_button.setDisabled(deploy_file.is_file())
+
+                def check_purged():
+                    if message_box is not None:
+                        if deploy_file.is_file():
+                            timer.start()
+                        else:
+                            continue_button.setDisabled(False)
+
+                timer.timeout.connect(check_purged)
+                timer.start()
+
+            choice = message_box.exec()
+            message_box = None
+
+            if choice == qtw.QMessageBox.StandardButton.Yes:
+                # First copy root files to a "Game Folder Files" folder in the destination
+                def process(ldialog: widgets.LoadingDialog):
+                    ldialog.updateProgress(text1=self.loc.main.copying_files)
+
+                    # Create the Game Folder Files directory in the destination mods folder
+                    game_folder_files_path = self.dst_modinstance.mods_path / "Game Folder Files"
+                    if not game_folder_files_path.exists():
+                        os.makedirs(game_folder_files_path, exist_ok=True)
+                    
+                    self.log.info(f"Copying root mods to {game_folder_files_path}")
+                    
+                    # Then copy to the game folder
+                    installdir = self.game_instance.get_install_dir()
+                    for i, mod in enumerate(self.src_modinstance.root_mods):
+                        ldialog.updateProgress(
+                            text1=f"{self.loc.main.copying_files} \
+- {i}/{len(self.src_modinstance.root_mods)}",
+                            value1=i,
+                            max1=len(self.src_modinstance.root_mods),
+                            show2=True,
+                            text2=mod.metadata["name"],
+                        )
+
+                        src_path = mod.path
+                        dst_path = installdir
+                        
+                        # First copy to Game Folder Files directory
+                        try:
+                            mod_game_folder_files = game_folder_files_path / mod.metadata["name"]
+                            shutil.copytree(src_path, mod_game_folder_files, dirs_exist_ok=True)
+                            self.log.info(f"Copied {mod.metadata['name']} to Game Folder Files directory")
+                        except shutil.Error as ex:
+                            self.log.error(
+                                f"Failed to copy to Game Folder Files: {ex}"
+                            )
+                        
+                        # Then copy to the game directory as before
+                        try:
+                            shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+                        except shutil.Error as ex:
+                            self.log.error(
+                                f"Failed to copy following files/folders: {ex}"
+                            )
+
+                loadingdialog = widgets.LoadingDialog(
+                    parent=self.root, app=self, func=process
+                )
+                loadingdialog.exec()
 
         # Get start time for performance measurement
         starttime = time.time()
 
-        # Now copy the rest of the mods to new instance
-        if self.src_modinstance.root_mods:
-            self.log.info("Now processing regular mods after Game Folder Files creation")
-        else:
-            self.log.info("No root mods to handle, proceeding with regular mods")
-            
+        # Copy mods to new instance
         loadingdialog = widgets.LoadingDialog(
             parent=self.root,
             app=self,
