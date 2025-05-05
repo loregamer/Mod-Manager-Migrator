@@ -6,6 +6,7 @@ Attribution-NonCommercial-NoDerivatives 4.0 International.
 
 import json
 import logging
+import os
 
 import qtpy.QtCore as qtc
 import qtpy.QtGui as qtg
@@ -118,8 +119,15 @@ class GameDialog(qtw.QDialog):
             self.app.game = self.game
 
             # Update game icon
-            icon = qtg.QPixmap(self.app.ico_path / self.game_instance.icon_name)
-            self.app.game_icon.setPixmap(icon)
+            try:
+                icon_path = os.path.join(str(self.app.ico_path), self.game_instance.icon_name)
+                if os.path.isfile(icon_path):
+                    icon = qtg.QPixmap(icon_path)
+                    self.app.game_icon.setPixmap(icon)
+                else:
+                    self.log.warning(f"Icon file not found: {icon_path}")
+            except Exception as e:
+                self.log.error(f"Failed to load icon: {e}")
 
             self.log.info(f"Current game: {self.game_instance.name}")
 
