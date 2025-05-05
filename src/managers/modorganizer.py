@@ -38,6 +38,7 @@ class MO2Instance(ModInstance):
         profs_dir = Path(self.instance_data["paths"]["profiles_dir"])
         prof_dir = Path(os.path.join(profs_dir, "Default"))
         overw_dir = Path(self.instance_data["paths"]["overwrite_dir"])
+        game_folder_files_dir = Path(self.instance_data["paths"].get("game_folder_files", mods_dir / "Game Folder Files"))
         self.paths = {
             "base_dir": base_dir,
             "dl_dir": dl_dir,
@@ -45,6 +46,7 @@ class MO2Instance(ModInstance):
             "profs_dir": profs_dir,
             "prof_dir": prof_dir,
             "overw_dir": overw_dir,
+            "game_folder_files_dir": game_folder_files_dir,
         }
 
         # Create directories
