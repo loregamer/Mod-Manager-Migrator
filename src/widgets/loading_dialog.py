@@ -40,6 +40,10 @@ class LoadingDialog(qtw.QDialog):
         # Set up variables
         self.app = app
         self.success = True
+        # Initialize scale factors for large progress values
+        self._scale_factor = 1
+        self._scale_factor2 = 1
+        self._scale_factor3 = 1
         self.func = lambda: (
             self.start_signal.emit(),
             func(self),
@@ -179,9 +183,20 @@ class LoadingDialog(qtw.QDialog):
 
         # Update first row (always shown)
         if max1 is not None:
-            self.pbar1.setRange(0, int(max1))
+            # Scale down large values to prevent integer overflow
+            if max1 > 2000000000:  # Close to 2^31 - 1 (max for 32-bit signed int)
+                self._scale_factor = max1 / 1000000000
+                scaled_max = 1000000000
+                self.pbar1.setRange(0, scaled_max)
+            else:
+                self._scale_factor = 1
+                self.pbar1.setRange(0, int(max1))
         if value1 is not None:
-            self.pbar1.setValue(int(value1))
+            if hasattr(self, '_scale_factor') and self._scale_factor > 1:
+                scaled_value = int(value1 / self._scale_factor)
+                self.pbar1.setValue(scaled_value)
+            else:
+                self.pbar1.setValue(int(value1))
         if text1 is not None:
             self.label1.setText(text1)
 
@@ -194,9 +209,20 @@ class LoadingDialog(qtw.QDialog):
             self.label2.hide()
 
         if max2 is not None:
-            self.pbar2.setRange(0, int(max2))
+            # Scale down large values to prevent integer overflow
+            if max2 > 2000000000:  # Close to 2^31 - 1 (max for 32-bit signed int)
+                self._scale_factor2 = max2 / 1000000000
+                scaled_max = 1000000000
+                self.pbar2.setRange(0, scaled_max)
+            else:
+                self._scale_factor2 = 1
+                self.pbar2.setRange(0, int(max2))
         if value2 is not None:
-            self.pbar2.setValue(int(value2))
+            if hasattr(self, '_scale_factor2') and self._scale_factor2 > 1:
+                scaled_value = int(value2 / self._scale_factor2)
+                self.pbar2.setValue(scaled_value)
+            else:
+                self.pbar2.setValue(int(value2))
         if text2 is not None:
             self.label2.setText(text2)
 
@@ -209,9 +235,20 @@ class LoadingDialog(qtw.QDialog):
             self.label3.hide()
 
         if max3 is not None:
-            self.pbar3.setRange(0, int(max3))
+            # Scale down large values to prevent integer overflow
+            if max3 > 2000000000:  # Close to 2^31 - 1 (max for 32-bit signed int)
+                self._scale_factor3 = max3 / 1000000000
+                scaled_max = 1000000000
+                self.pbar3.setRange(0, scaled_max)
+            else:
+                self._scale_factor3 = 1
+                self.pbar3.setRange(0, int(max3))
         if value3 is not None:
-            self.pbar3.setValue(int(value3))
+            if hasattr(self, '_scale_factor3') and self._scale_factor3 > 1:
+                scaled_value = int(value3 / self._scale_factor3)
+                self.pbar3.setValue(scaled_value)
+            else:
+                self.pbar3.setValue(int(value3))
         if text3 is not None:
             self.label3.setText(text3)
 
